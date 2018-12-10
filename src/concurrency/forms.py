@@ -15,6 +15,21 @@ from concurrency.config import conf
 from concurrency.core import _select_lock
 from concurrency.exceptions import RecordModifiedError, VersionError
 
+try:
+    # Django >=1.11
+    from django.forms.widgets import get_default_renderer
+except ImportError:
+    # Django <1.11
+    from django.template.loader import render_to_string
+
+    def get_default_renderer():
+        class DummyDjangoRenderer(object):
+            @staticmethod
+            def render(*args, **kwargs):
+                return render_to_string(*args, **kwargs)
+
+        return DummyDjangoRenderer
+
 
 class ConcurrentForm(ModelForm):
     """ Simple wrapper to ModelForm that try to mitigate some concurrency error.
@@ -50,8 +65,11 @@ class VersionWidget(HiddenInput):
 
     _format_value = format_value
 
-    def render(self, name, value, attrs=None):
-        ret = super(VersionWidget, self).render(name, value, attrs)
+    def render(self, name, value, attrs=None, renderer=None):
+        if renderer is None:
+            renderer = get_default_renderer()
+
+        ret = super(VersionWidget, self).render(name, value, attrs,renderer)
         label = ''
         if isinstance(value, SignedValue):
             label = str(value).split(':')[0]
